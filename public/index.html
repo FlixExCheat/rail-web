@@ -5,69 +5,89 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>rail</title>
 <style>
-  :root { --bg:#0d0f12; --panel:#16191e; --panel2:#1e2229; --line:#2c313a;
-          --text:#d6dce5; --muted:#808996; --accent:#58a6ff; --good:#4ad58c; --bad:#f0766a; }
+  :root { --bg:#0b0d11; --panel:#14171d; --panel2:#1c2027; --line:#2a2f38; --line2:#39414d;
+          --text:#d7dde6; --muted:#7d8795; --accent:#4f9dff; --good:#3fd08a; --bad:#ef6f63;
+          --warn:#e5b567; }
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
-    font:13px/1.4 "Segoe UI",system-ui,sans-serif; overflow:hidden; }
+    font:13px/1.45 "Segoe UI",system-ui,sans-serif; overflow:hidden; }
   #app { display:flex; flex-direction:column; height:100%; }
-  header { display:flex; align-items:center; gap:10px; padding:9px 14px;
+  header { display:flex; align-items:center; gap:10px; padding:8px 14px;
     border-bottom:1px solid var(--line); background:var(--panel); }
-  header b { font-size:15px; letter-spacing:.5px; }
-  .dot { width:9px; height:9px; border-radius:50%; background:#5a606c; }
-  .dot.on { background:var(--good); }
-  .grow { flex:1; }
-  .muted { color:var(--muted); }
+  header b { font-size:15px; letter-spacing:.4px; }
+  .dot { width:9px; height:9px; border-radius:50%; background:#4a515c; }
+  .dot.on { background:var(--good); box-shadow:0 0 6px #3fd08a88; }
+  .grow { flex:1; } .muted { color:var(--muted); }
   input, select { background:var(--panel2); color:var(--text); border:1px solid var(--line);
     border-radius:6px; padding:5px 8px; font:12px "Segoe UI",sans-serif; outline:none; }
-  input:focus { border-color:#3a6ea5; }
-  button { background:#22262e; color:var(--text); border:1px solid #343a45; border-radius:6px;
+  input:focus, select:focus { border-color:#3d6fa8; }
+  button { background:#1f242c; color:var(--text); border:1px solid #333b46; border-radius:6px;
     padding:6px 10px; font:12px "Segoe UI",sans-serif; cursor:pointer; }
-  button:hover { background:#2b313a; }
-  button.accent { background:#224e8a; border-color:#3a6ea5; color:#fff; }
-  button.danger { background:#4a2c2c; border-color:#7a4642; color:#ffc4be; }
+  button:hover { background:#272d36; border-color:#465061; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.accent { background:#1d4d86; border-color:#3a6ea5; color:#fff; }
+  button.accent:hover { background:#245c9f; }
+  button.danger { background:#482a29; border-color:#7a4642; color:#ffc3bd; }
+  button.sm { padding:3px 7px; font-size:11px; }
   main { flex:1; display:flex; min-height:0; }
-  #view { flex:1; position:relative; background:#060709; min-width:0; }
+  #view { flex:1; position:relative; background:#05070a; min-width:0; }
   canvas { display:block; width:100%; height:100%; cursor:crosshair; }
   #idle { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     color:var(--muted); flex-direction:column; gap:6px; pointer-events:none; }
-  aside { width:340px; background:var(--panel); border-left:1px solid var(--line);
+  aside { width:360px; background:var(--panel); border-left:1px solid var(--line);
     display:flex; flex-direction:column; min-height:0; }
-  aside > div { padding:9px 12px; }
-  .sec { border-bottom:1px solid var(--line); }
-  .cap { font-size:11px; letter-spacing:1px; color:#70c2a4; margin-bottom:6px; }
-  #devices { max-height:140px; overflow:auto; }
-  .dev { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:6px;
+  .sec { padding:9px 12px; border-bottom:1px solid var(--line); }
+  .cap { font-size:10.5px; letter-spacing:1.2px; color:#5fb894; margin-bottom:6px; text-transform:uppercase; }
+  #devices { max-height:132px; overflow:auto; }
+  .dev { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:7px;
     cursor:pointer; border:1px solid transparent; }
-  .dev:hover { background:#1c2027; }
-  .dev.sel { background:#22456f; border-color:#3a6ea5; }
-  .dev .d { width:8px; height:8px; border-radius:50%; background:var(--good); }
+  .dev:hover { background:#191d24; }
+  .dev.sel { background:#1b3f68; border-color:#3a6ea5; }
+  .dev .d { width:8px; height:8px; border-radius:50%; background:var(--good); flex:none; }
   .dev .n { font-size:12px; } .dev .s { font-size:11px; color:var(--muted); }
-  .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  .row { display:flex; gap:7px; align-items:center; margin-bottom:7px; }
   .row:last-child { margin-bottom:0; }
+  .row > .f1 { flex:1; min-width:0; }
   label { font-size:11px; color:var(--muted); }
   #log { flex:1; overflow:auto; font:11px/1.35 Consolas,monospace; border:1px solid var(--line);
-    border-radius:6px; background:#14171c; min-height:80px; }
+    border-radius:6px; background:#0f1216; min-height:70px; }
   table { width:100%; border-collapse:collapse; }
-  td, th { padding:2px 6px; border-bottom:1px solid #1d2127; text-align:left; vertical-align:top; }
-  td.t { color:#8ea3bd; white-space:nowrap; } td.w { color:#6f7a8a; max-width:92px;
+  td, th { padding:2px 5px; border-bottom:1px solid #1a1e24; text-align:left; vertical-align:top; }
+  td.t { color:#87a0bb; white-space:nowrap; } td.w { color:#68727f; max-width:88px;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  #login { position:fixed; inset:0; background:#0b0d10; display:flex; align-items:center;
+  #login { position:fixed; inset:0; background:#080a0d; display:flex; align-items:center;
     justify-content:center; z-index:50; }
-  #login .box { background:var(--panel); border:1px solid var(--line); border-radius:12px;
-    padding:24px; width:320px; display:flex; flex-direction:column; gap:10px; }
-  #login h1 { margin:0 0 6px; font-size:18px; }
-  #admin { position:fixed; inset:0; background:#0b0d10ee; z-index:40; display:none; padding:24px; }
-  #admin .wrap { max-width:1100px; margin:0 auto; background:var(--panel); border:1px solid var(--line);
-    border-radius:12px; padding:18px; max-height:100%; overflow:auto; }
-  #admin h2 { margin:0 0 12px; font-size:15px; color:#70c2a4; }
-  #admin .cols { display:flex; gap:18px; flex-wrap:wrap; }
-  #admin .col { flex:1; min-width:300px; }
-  #admin table { font-size:12px; }
-  #admin td button { padding:2px 6px; font-size:11px; }
-  .ok { color:var(--good); } .bad { color:var(--bad); }
+  #login .box { background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:26px; width:330px; display:flex; flex-direction:column; gap:10px; }
+  #login h1 { margin:0 0 8px; font-size:19px; letter-spacing:.5px; }
+  .modal { position:fixed; inset:0; background:#080a0de8; z-index:40; display:none; padding:26px; }
+  .modal .wrap { max-width:1080px; margin:0 auto; background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:20px; max-height:100%; overflow:auto; }
+  .modal h2 { margin:0 0 14px; font-size:14px; color:#5fb894; letter-spacing:1px; }
+  .cols { display:flex; gap:18px; flex-wrap:wrap; }
+  .col { flex:1; min-width:300px; }
+  .modal table { font-size:12px; }
+  .ok { color:var(--good); } .bad { color:var(--bad); } .warn { color:var(--warn); }
   #toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
-    background:#224e8a; color:#fff; padding:8px 14px; border-radius:8px; display:none; z-index:60; }
+    background:#1d4d86; color:#fff; padding:8px 16px; border-radius:9px; display:none;
+    z-index:60; font-size:12px; box-shadow:0 6px 24px #0008; }
+  #tabs { display:flex; gap:6px; padding:8px 12px 0; }
+  #tabs button { flex:1; padding:7px 4px; font-size:12px; border-radius:7px 7px 0 0;
+    background:#171b21; border-bottom:none; color:var(--muted); }
+  #tabs button.on { background:var(--panel2); color:#fff; border-color:var(--line2); }
+  .pane { display:none; flex:1; min-height:0; flex-direction:column; padding:9px 12px; gap:8px; }
+  .pane.on { display:flex; }
+  #pad { flex:1; min-height:90px; background:var(--panel2); border:1px solid var(--line);
+    border-radius:9px; position:relative; touch-action:none; }
+  #pad .hint { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:#5a6472; font-size:11px; pointer-events:none; }
+  #kbd { display:grid; grid-template-columns:repeat(10,1fr); gap:4px; }
+  #kbd button { padding:7px 0; font-size:11px; }
+  #shellOut { flex:1; overflow:auto; background:#0f1216; border:1px solid var(--line);
+    border-radius:6px; padding:8px; font:11px/1.4 Consolas,monospace; white-space:pre-wrap; }
+  .quick { display:flex; flex-wrap:wrap; gap:5px; }
+  .quick button { padding:4px 7px; font-size:11px; }
+  .vol { display:flex; align-items:center; gap:6px; }
 </style>
 </head>
 <body>
@@ -83,8 +103,7 @@
 
 <div id="app">
   <header>
-    <b>rail</b>
-    <span id="st" class="dot"></span>
+    <b>rail</b><span id="st" class="dot"></span>
     <span id="who" class="muted">—</span>
     <span class="grow"></span>
     <span id="stats" class="muted"></span>
@@ -99,61 +118,112 @@
     </div>
     <aside>
       <div class="sec">
-        <div class="cap">GERÄTE <span id="dcount" class="muted" style="float:right"></span></div>
+        <div class="cap">Geräte <span id="dcount" class="muted" style="float:right;font-size:10px"></span></div>
         <div id="devices"><div class="muted" style="font-size:11px">keine</div></div>
       </div>
       <div class="sec">
-        <div class="cap">SCREEN</div>
-        <div class="row"><select id="mon" style="flex:1"></select><button id="scan">scan</button></div>
-        <div class="row"><label style="width:44px">quality</label>
-          <input id="q" type="range" min="10" max="95" value="55" style="flex:1">
-          <span id="qv" style="width:22px;text-align:right">55</span></div>
+        <div class="row"><select id="mon" class="f1"></select><button id="scan" class="sm">scan</button></div>
+        <div class="row"><label style="width:42px">qual</label>
+          <input id="q" type="range" min="10" max="95" value="55" class="f1"><span id="qv" style="width:20px;text-align:right">55</span></div>
         <div class="row">
-          <select id="fps"><option>5</option><option>8</option><option selected>10</option>
+          <select id="fps" class="f1"><option>5</option><option>8</option><option selected>10</option>
             <option>15</option><option>20</option><option>25</option><option>30</option></select>
-          <select id="scale"><option>100 %</option><option>75 %</option><option>50 %</option><option>35 %</option></select>
+          <select id="scale" class="f1"><option>100 %</option><option>75 %</option><option>50 %</option><option>35 %</option></select>
         </div>
-        <div class="row"><button id="live" class="accent" style="flex:1">▶ live</button><button id="rel">release</button></div>
+        <div class="row"><button id="live" class="accent f1">▶ live</button><button id="rel">release</button></div>
         <div class="row"><label><input id="ctl" type="checkbox"> control — klick und tipp im bild</label></div>
       </div>
-      <div style="flex:1; display:flex; flex-direction:column; min-height:0; padding:9px 12px;">
-        <div class="cap">LOG</div>
-        <div class="row"><input id="q2" style="flex:1" placeholder="w:fenster  t:text"><button id="query" class="accent">query</button></div>
-        <div class="row"><button id="export" style="flex:1">alles exportieren</button></div>
-        <div class="row"><button id="clear" style="flex:1">log leeren</button></div>
-        <div class="row"><button id="wipe" class="danger" style="flex:1">self destroy</button></div>
+
+      <div id="tabs">
+        <button data-pane="maus" class="on">maus</button>
+        <button data-pane="tasten">tasten</button>
+        <button data-pane="ton">ton</button>
+        <button data-pane="shell">shell</button>
+        <button data-pane="log">log</button>
+      </div>
+
+      <div class="pane on" id="pane-maus">
+        <div id="pad"><div class="hint">ziehen = bewegen · tippen = linksklick</div></div>
+        <div class="row"><button data-mb="0" class="f1">LMB</button><button data-mb="2" class="f1">RMB</button>
+          <button data-mb="1" class="f1">MMB</button><button id="whUp">rad +</button><button id="whDn">rad −</button></div>
+        <div class="quick">
+          <button data-vk="9">tab</button><button data-vk="13">enter</button>
+          <button data-vk="27">esc</button><button data-vk="8">bksp</button>
+          <button data-vk="91">win</button><button data-combo="alt-tab">alt+tab</button>
+          <button data-combo="win-d">win+d</button><button data-combo="win-l">sperren</button>
+          <button data-combo="taskmgr">taskmgr</button><button data-vk="175">lauter</button>
+          <button data-vk="174">leiser</button><button data-vk="173">mute</button>
+        </div>
+      </div>
+
+      <div class="pane" id="pane-tasten">
+        <div class="row"><input id="typ" class="f1" placeholder="live tippen — geht sofort rüber"></div>
+        <div class="row"><button id="paste">zwischenablage einfügen</button><button id="clipGet">clipboard holen</button></div>
+        <div id="kbd"></div>
+      </div>
+
+      <div class="pane" id="pane-ton">
+        <div class="row"><button id="audio" class="accent f1">▶ ton an</button>
+          <select id="arate" class="f1"><option value="16000">16 kHz</option><option value="32000">32 kHz</option></select></div>
+        <div class="row vol"><label style="width:52px">lautstärke</label>
+          <input id="vol" type="range" min="0" max="100" value="70" class="f1"><span id="volv" style="width:24px;text-align:right">70</span></div>
+        <div class="row"><span id="astat" class="muted" style="font-size:11px">—</span></div>
+        <div class="quick"><button data-vk="175">lauter</button><button data-vk="174">leiser</button><button data-vk="173">mute</button></div>
+      </div>
+
+      <div class="pane" id="pane-shell">
+        <div class="row"><select id="shtype" style="width:96px"><option value="cmd">cmd</option><option value="ps">powershell</option></select>
+          <input id="shcmd" class="f1" placeholder="befehl…"></div>
+        <div class="row"><button id="shrun" class="accent">ausführen</button></div>
+        <div class="quick">
+          <button data-sh="ipconfig">ipconfig</button>
+          <button data-sh="tasklist">tasklist</button>
+          <button data-sh="whoami /all">whoami</button>
+          <button data-sh="systeminfo">systeminfo</button>
+          <button data-sh="shutdown /s /t 0" class="danger">shutdown</button>
+          <button data-sh="shutdown /r /t 0" class="danger">reboot</button>
+          <button data-sh="shutdown /l" class="danger">logoff</button>
+          <button data-sh="rundll32.exe user32.dll,LockWorkStation">sperren</button>
+        </div>
+        <div id="shellOut">—</div>
+      </div>
+
+      <div class="pane" id="pane-log">
+        <div class="row"><input id="q2" class="f1" placeholder="w:fenster  t:text"><button id="query" class="accent">query</button></div>
+        <div class="row"><button id="export" class="f1">alles exportieren</button><button id="clear">log leeren</button></div>
+        <div class="row"><button id="wipe" class="danger f1">self destroy</button><button id="upd" class="f1">agent update</button></div>
         <div class="row"><span id="lcount" class="muted" style="font-size:11px">—</span></div>
         <div id="log"><table><tbody id="rows"></tbody></table></div>
+        <input id="updfile" type="file" accept=".exe" style="display:none">
       </div>
     </aside>
   </main>
 </div>
 
-<div id="admin">
+<div class="modal" id="admin">
   <div class="wrap">
     <div style="display:flex;align-items:center;gap:10px">
-      <h2 style="flex:1;margin:0">ADMIN</h2>
-      <button id="adminClose">schließen</button>
+      <h2 style="flex:1">ADMIN</h2><button id="adminClose">schließen</button>
     </div>
-    <div class="cols" style="margin-top:14px">
+    <div class="cols">
       <div class="col">
-        <div class="cap">ACCOUNTS</div>
+        <div class="cap">Accounts</div>
         <table><thead><tr><th>user</th><th>rolle</th><th></th></tr></thead><tbody id="urows"></tbody></table>
         <div class="row" style="margin-top:10px">
-          <input id="nu" placeholder="benutzer" style="width:110px">
-          <input id="np" placeholder="passwort" style="width:110px">
+          <input id="nu" placeholder="benutzer" style="width:104px">
+          <input id="np" placeholder="passwort" style="width:104px">
           <select id="nr"><option>viewer</option><option>operator</option><option>admin</option></select>
           <button id="nadd" class="accent">anlegen</button>
         </div>
       </div>
       <div class="col">
-        <div class="cap">LIVE</div>
+        <div class="cap">Live</div>
         <table><thead><tr><th>user</th><th>seit</th><th>ip</th><th></th></tr></thead><tbody id="srows"></tbody></table>
       </div>
     </div>
-    <div style="margin-top:18px">
-      <div class="cap">AKTIVITÄT</div>
-      <div id="audit" style="max-height:260px;overflow:auto;font:11px/1.4 Consolas,monospace"></div>
+    <div style="margin-top:16px">
+      <div class="cap">Aktivität</div>
+      <div id="audit" style="max-height:240px;overflow:auto;font:11px/1.45 Consolas,monospace"></div>
     </div>
   </div>
 </div>
