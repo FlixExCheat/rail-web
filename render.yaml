@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: rail-web
+    runtime: node
+    plan: free
+    buildCommand: npm install --no-audit --no-fund
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: ROOM_TOKEN
+        generateValue: true

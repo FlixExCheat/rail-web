@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rail</title>
+<style>
+  :root {
+    --bg:#0d0f12; --panel:#16191e; --panel2:#1e2229; --line:#2c313a;
+    --text:#d6dce5; --muted:#808996; --accent:#58a6ff; --good:#4ad58c; --bad:#f0766a;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
+    font:13px/1.4 "Segoe UI",system-ui,sans-serif; overflow:hidden; }
+  #app { display:flex; flex-direction:column; height:100%; }
+  header { display:flex; align-items:center; gap:12px; padding:10px 16px;
+    border-bottom:1px solid var(--line); background:var(--panel); }
+  header b { font-size:15px; letter-spacing:.5px; }
+  .dot { width:9px; height:9px; border-radius:50%; background:#5a606c; }
+  .dot.on { background:var(--good); }
+  .grow { flex:1; }
+  .muted { color:var(--muted); }
+  input[type=text], input[type=password], select {
+    background:var(--panel2); color:var(--text); border:1px solid var(--line);
+    border-radius:6px; padding:5px 8px; font:12px "Segoe UI",sans-serif; outline:none; }
+  input[type=text]:focus, input[type=password]:focus { border-color:#3a6ea5; }
+  button { background:#22262e; color:var(--text); border:1px solid #343a45;
+    border-radius:6px; padding:6px 10px; font:12px "Segoe UI",sans-serif; cursor:pointer; }
+  button:hover { background:#2b313a; border-color:#495260; }
+  button.accent { background:#224e8a; border-color:#3a6ea5; color:#fff; }
+  button.accent:hover { background:#2a5fa5; }
+  button.danger { background:#4a2c2c; border-color:#7a4642; color:#ffc4be; }
+  main { flex:1; display:flex; min-height:0; }
+  #view { flex:1; position:relative; background:#060709; min-width:0; }
+  canvas { display:block; width:100%; height:100%; cursor:crosshair; }
+  #idle { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:var(--muted); pointer-events:none; flex-direction:column; gap:6px; }
+  aside { width:330px; background:var(--panel); border-left:1px solid var(--line);
+    display:flex; flex-direction:column; min-height:0; }
+  aside > div { padding:10px 12px; }
+  .sec { border-bottom:1px solid var(--line); }
+  .cap { font-size:11px; letter-spacing:1px; color:#70c2a4; margin-bottom:6px; }
+  #devices { max-height:150px; overflow:auto; }
+  .dev { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:6px;
+    cursor:pointer; border:1px solid transparent; }
+  .dev:hover { background:#1c2027; }
+  .dev.sel { background:#22456f; border-color:#3a6ea5; }
+  .dev .d { width:8px; height:8px; border-radius:50%; background:var(--good); }
+  .dev .n { font-size:12px; }
+  .dev .s { font-size:11px; color:var(--muted); }
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  .row:last-child { margin-bottom:0; }
+  label { font-size:11px; color:var(--muted); }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+  #logwrap { flex:1; display:flex; flex-direction:column; min-height:0; padding:10px 12px; }
+  #log { flex:1; overflow:auto; font:11px/1.35 Consolas,monospace; border:1px solid var(--line);
+    border-radius:6px; background:#14171c; }
+  table { width:100%; border-collapse:collapse; }
+  td { padding:2px 6px; border-bottom:1px solid #1d2127; vertical-align:top; }
+  td.t { color:#8ea3bd; white-space:nowrap; }
+  td.w { color:#6f7a8a; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #stats { font-size:11px; color:#687282; }
+  .bar { display:flex; gap:6px; }
+  .bar > * { flex:1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <b>rail</b>
+    <span id="st" class="dot"></span>
+    <span id="who" class="muted">no link</span>
+    <span class="grow"></span>
+    <span id="stats" class="muted"></span>
+    <input id="room" type="text" size="10" placeholder="room">
+    <input id="key" type="password" size="12" placeholder="key">
+    <button id="connect">connect</button>
+  </header>
+  <main>
+    <div id="view">
+      <canvas id="cv"></canvas>
+      <div id="idle"><div>no signal</div><div class="muted" style="font-size:11px">waiting for an agent on the rail</div></div>
+    </div>
+    <aside>
+      <div class="sec">
+        <div class="cap">GERÄTE <span id="dcount" class="muted" style="float:right"></span></div>
+        <div id="devices"><div class="muted" style="font-size:11px">keine</div></div>
+      </div>
+      <div class="sec">
+        <div class="cap">SCREEN</div>
+        <div class="row"><select id="mon" style="flex:1"></select><button id="scan">scan</button></div>
+        <div class="row"><label style="width:44px">quality</label>
+          <input id="q" type="range" min="10" max="95" value="55"><span id="qv" style="width:22px;text-align:right">55</span></div>
+        <div class="row">
+          <select id="fps">
+            <option>5</option><option>8</option><option selected>10</option>
+            <option>15</option><option>20</option><option>25</option><option>30</option>
+          </select>
+          <select id="scale"><option>100 %</option><option>75 %</option><option>50 %</option><option>35 %</option></select>
+        </div>
+        <div class="row bar"><button id="live" class="accent">▶ live</button><button id="rel">release</button></div>
+        <div class="row"><label><input id="ctl" type="checkbox"> control — klick und tipp im bild</label></div>
+      </div>
+      <div id="logwrap">
+        <div class="cap">LOG</div>
+        <div class="row"><input id="q2" type="text" style="flex:1" placeholder="w:fenster  t:text"><button id="query" class="accent">query</button></div>
+        <div class="row"><button id="export" style="flex:1">alles exportieren</button></div>
+        <div class="row"><span id="lcount" class="muted" style="font-size:11px">—</span></div>
+        <div id="log"><table><tbody id="rows"></tbody></table></div>
+      </div>
+    </aside>
+  </main>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
