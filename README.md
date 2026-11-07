@@ -1,4 +1,4 @@
-rail-web ? bedienung im browser, gehostet auf Render
+rail-web ? panel mit accounts, rollen, kick, audit.
 
-Ordnerinhalt und deploy: siehe DEPLOY.md
-Kurz: GitHub-repo hochladen -> Render Blueprint -> URL -> agent neu bauen.
+Deploy: siehe DEPLOY.md
+Kurz: ganzen ordner ins repo -> RAIL_PSK + ADMIN_PASS in Render -> /health -> cron-job.org.

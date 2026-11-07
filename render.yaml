@@ -7,5 +7,9 @@ services:
     startCommand: node server.js
     healthCheckPath: /health
     envVars:
-      - key: ROOM_TOKEN
-        generateValue: true
+      - key: RAIL_PSK
+        sync: false
+      - key: ADMIN_USER
+        value: admin
+      - key: ADMIN_PASS
+        sync: false
