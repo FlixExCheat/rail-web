@@ -231,6 +231,7 @@ async function onAgent(peer, req, url) {
   let state = 0, na = null, nb = null;
 
   peer.onMessage = async (msg) => {
+    a.lastSeen = Date.now();
     try {
       if (state === 0) {
         if (msg.length !== 16) return;
@@ -257,6 +258,16 @@ async function onAgent(peer, req, url) {
       if (type === 0x10) {
         const d = JSON.parse(new TextDecoder().decode(body));
         a.host = d.host || ''; a.user = d.user || ''; a.keys = d.keys ?? -1;
+        if (d.id) {
+          a.id = d.id;
+          for (const [other, o] of agents) {
+            if (other !== slot && o.id === a.id) {
+              logEvent('agent', 'duplikat ersetzt', 'slot ' + other + ' -> ' + slot);
+              try { o.ws.close(); } catch { }
+              agents.delete(other);
+            }
+          }
+        }
         logEvent('agent', 'hello', a.user + '@' + a.host);
         pushDevices();
       } else if (type === 0x11) {
